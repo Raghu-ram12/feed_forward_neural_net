@@ -1,7 +1,5 @@
 import numpy as np 
 
-from scipy.special import softmax
-
 class layer:
 
     def __init__(self,input_dims,output_dims,activation="relu",alpha=0.01):
@@ -18,7 +16,7 @@ class layer:
 
         self.Weight=np.random.randn((input_dims,output_dims))*initialization_factor  
 
-        self.bias=np.zeros((1,output_dims)) 
+        self.bias=np.zeros((1,output_dims))  
         self.alpha=alpha 
         self.activation=activation 
         self.dw=None 
@@ -43,9 +41,9 @@ class layer:
 
         return np.where(z>=0,1,0) 
         
-    def leaky_relu(self,z,alpha=0.01): 
+    def leaky_relu(self,z): 
 
-        return np.maximum(alpha*z,z) 
+        return np.maximum(self.alpha*z,z) 
 
     def leaky_relu_prime(self,z):
 
@@ -142,26 +140,39 @@ class NeuralNetwork:
 
             A_prev=l.forward_pass(A_prev) 
         
-        self.output=A_prev 
+        self.output=A_prev  
+
+        return self.output
     
     def calculate_error(self,actual_data):
         
         return self.output-actual_data 
 
 
-    def backward_propagation(self,actual_data): 
+    def backward_propagation(self,actual_data,learning_rate): 
 
         prev_delta=self.calculate_error(actual_data)  
 
-        for layer in self.layers[::-1]:
+        for lyr in self.layers[::-1]:
 
-            prev_delta=layer.backward_pass(prev_delta) 
-        
+            prev_delta=lyr.backward_pass(prev_delta) 
 
-
+            layer.dw=layer.dw-learning_rate*lyr.dw 
+            layer.db=db-learning_rate*lyr.db 
     
-        
-        
-         
+    
+    def train(self,X_train,Y_train,epochs=100,learning_rate=0.01):
 
 
+        for _ in range(epochs):
+
+            self.forward_propagation(X_train) 
+            self.backward_propagation(Y_train,learning_rate) 
+
+
+    def predict(self,x_test): 
+
+
+        output=self.forward_propagation(x_test) 
+
+        return output 
