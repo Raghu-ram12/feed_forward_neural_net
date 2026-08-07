@@ -122,7 +122,44 @@ class layer:
 
 
 
+class NeuralNetwork:
 
+    def __init__(self):
+
+        self.layers=[]  
+        self.output=None 
+
+    
+    def add_layer(self,input_dims,output_dims,activation="relu"): 
+
+        self.layers.append(layer(input_dims,output_dims,activation=activation))  
+
+    def forward_propagation(self,x):
+
+        A_prev=x
+
+        for l in self.layers:
+
+            A_prev=l.forward_pass(A_prev) 
+        
+        self.output=A_prev 
+    
+    def calculate_error(self,actual_data):
+        
+        return self.output-actual_data 
+
+
+    def backward_propagation(self,actual_data): 
+
+        prev_delta=self.calculate_error(actual_data)  
+
+        for layer in self.layers[::-1]:
+
+            prev_delta=layer.backward_pass(prev_delta) 
+        
+
+
+    
         
         
          
