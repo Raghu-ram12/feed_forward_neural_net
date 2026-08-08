@@ -27,7 +27,7 @@ class layer:
         self.z = None
         self.optimizer = None
 
-    def set_optimizer(self, optimizer, beta1=0.01, beta2=0.02):
+    def set_optimizer(self, optimizer, beta1=0.9, beta2=0.99):
 
         self.optimizer = optimizer
 
@@ -206,14 +206,19 @@ class layer:
 
 class NeuralNetwork:
 
-    def __init__(self):
+    def __init__(self,optimizer="grad"): 
 
+        self.optimizer=optimizer
         self.layers = []
         self.output = None
 
-    def add_layer(self, input_dims, output_dims, activation="relu"):
+    def add_layer(self, input_dims, output_dims, activation="relu",beta1=0.9,beta2=0.9):
 
-        self.layers.append(layer(input_dims, output_dims, activation=activation))
+        lyr=layer(input_dims, output_dims, activation=activation)
+
+        lyr.set_optimizer(self.optimizer,beta1,beta2) 
+
+        self.layers.append(lyr)
 
     def forward_propagation(self, x):
 
@@ -238,7 +243,7 @@ class NeuralNetwork:
         for lyr in self.layers[::-1]:
 
             prev_delta = lyr.backward_pass(prev_delta)
-            lyr.optimize_weights(learning_rate)
+            lyr.optimize_weights(learning_rate) 
 
     def train(self, X_train, Y_train, epochs=100, learning_rate=0.01):
 
@@ -251,4 +256,5 @@ class NeuralNetwork:
 
         output = self.forward_propagation(x_test)
 
-        return output
+        return output 
+        
