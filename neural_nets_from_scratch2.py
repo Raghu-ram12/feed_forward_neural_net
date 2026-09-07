@@ -317,5 +317,36 @@ class Network:
        
         self.forward(x_test)
 
-        return self.output 
+        return self.output  
+
+    def save_network(self,name="network",path=None):
+
+        np_arr=np.array([layer for layer in self.layers]) 
+
+        if path:
+            np.save(path+"/"+name,np_arr) 
+            print("Model saved to the path"+path+"/"+name+"successfully") 
+        else:
+            np.save(name,np_arr)
+            print("Model saved to the path"+name+"successfully")
+
+        
+    def load_network(self,path):
+
+        np_arr=np.load(path)
+
+        for layer in np_arr:
+
+            self.layers.append(layer)  
+        
+        print("network in the path"+ path + "loaded successfully!")
+        
+       
+
+
+
+
     
+
+
+
