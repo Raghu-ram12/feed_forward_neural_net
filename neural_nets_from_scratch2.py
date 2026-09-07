@@ -1,4 +1,5 @@
 import numpy as np
+from pathlib import Path
 
 class Loss:
 
@@ -323,23 +324,31 @@ class Network:
 
         np_arr=np.array([layer for layer in self.layers]) 
 
-        if path:
-            np.save(path+"/"+name,np_arr) 
-            print("Model saved to the path"+path+"/"+name+"successfully") 
-        else:
-            np.save(name,np_arr)
-            print("Model saved to the path"+name+"successfully")
+        save_path=Path(path)/name if path else Path(name) 
+
+        np.save(str(save_path),np_arr,allow_pickle=True) 
+
+        print()
+        print("Model saved to the path "+str(save_path)+"successfully") 
+
 
         
     def load_network(self,path):
 
-        np_arr=np.load(path)
+        load_path = Path(path)
+        if load_path.suffix != '.npy' and not load_path.exists():
+            load_path = load_path.with_suffix('.npy')
+
+        np_arr = np.load(str(load_path), allow_pickle=True)
+        
+        self.layers=[]
 
         for layer in np_arr:
 
-            self.layers.append(layer)  
-        
-        print("network in the path"+ path + "loaded successfully!")
+            self.layers.append(layer) 
+         
+        print()
+        print("model in the path"+ str(load_path) + "loaded successfully!")
         
        
 

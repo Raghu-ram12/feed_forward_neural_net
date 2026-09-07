@@ -54,6 +54,8 @@ def main():
 
     test_acc = accuracy(net, X_test, y_test_labels)
 
+    net.save_network(name="demo_net")
+
     print(f"\nTrain accuracy: {train_acc:.4f}")
     print(f"Test accuracy:  {test_acc:.4f}")
 
