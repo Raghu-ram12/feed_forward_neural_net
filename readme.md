@@ -1,98 +1,192 @@
-# Feedforward Neural Network from Scratch (NumPy)
+# Deep Learning Framework from Scratch (NumPy)
 
-A fully connected neural network implemented from scratch using only NumPy — no PyTorch, no TensorFlow. Built to understand the mechanics of forward propagation, backpropagation, and gradient-based optimization at the matrix-math level, and tested end-to-end on MNIST digit classification.
+A lightweight, extensible deep learning library implemented from scratch in pure NumPy — without PyTorch or TensorFlow. Built to demonstrate forward propagation, backpropagation, vectorization via matrix operations, and gradient-based optimization algorithms. Supports both fully connected feedforward networks (FNNs) and 2D convolutional neural networks (CNNs).
 
-## Project Structure
+---
 
+## Class Hierarchy & Architecture
+
+The framework uses an object-oriented, single-inheritance design centered around `DenseLayer` as the core trainable layer abstraction.
+
+```mermaid
+classDiagram
+    class Activation {
+        +tanh(z)
+        +tanh_prime(z)
+        +relu(z)
+        +relu_prime(z)
+        +leaky_relu(z)
+        +leaky_relu_prime(z)
+        +sigmoid(z)
+        +sigmoid_prime(z)
+    }
+
+    class DenseLayer {
+        +input_dims: int
+        +output_dims: int
+        +weights: ndarray
+        +bias: ndarray
+        +activation_func: str
+        +optimizer: str
+        +initialize_weights(activation_func)
+        +initialize_optimizer(optimizer, learning_rate, beta, gamma)
+        +forward_pass(prev_activation)
+        +backward_pass(prev_delta)
+        +optimize_weights()
+        #_get_activated_output()
+        #_get_derivative()
+    }
+
+    class Conv2DLayer {
+        +num_filters: int
+        +kh: int
+        +kw: int
+        +stride: int
+        +padding: int
+        +output_shape: tuple
+        +initialize_weights(activation_func)
+        +forward_pass(x)
+        +backward_pass(prev_delta)
+    }
+
+    class MaxPool2DLayer {
+        +pool_h: int
+        +pool_w: int
+        +stride: int
+        +output_shape: tuple
+        +forward_pass(x)
+        +backward_pass(prev_delta)
+    }
+
+    class FlattenLayer {
+        +input_shape: tuple
+        +forward_pass(x)
+        +backward_pass(prev_delta)
+    }
+
+    Activation <|-- DenseLayer
+    DenseLayer <|-- Conv2DLayer
+    DenseLayer <|-- MaxPool2DLayer
+    DenseLayer <|-- FlattenLayer
 ```
-├── neural_nets_from_scratch2.py   # Core library: Loss, Activation, DenseLayer, Network
-├── train_mnist.py                 # End-to-end training script on the MNIST dataset
-└── readme.md
-```
+
+### Inheritance Breakdown
+
+1. **`Activation`**: Base mathematical mixin providing non-linear functions (`relu`, `leaky_relu`, `tanh`, `sigmoid`) and their derivatives (`relu_prime`, `leaky_relu_prime`, etc.).
+2. **`DenseLayer(Activation)`**: The foundational layer class. Encapsulates parameter state (`weights`, `bias`), optimizer state, initialization, forward transform, error backpropagation, and element-wise optimizer weight updates (`grad`, `grad-momentum`, `adagrad`, `rmsprop`).
+3. **`Conv2DLayer(DenseLayer)`**: Inherits directly from `DenseLayer`. Overrides weight shape `(num_filters, C, kh, kw)` and spatial forward/backward transforms via matrix-based `im2col`/`col2im` operations, while inheriting optimizer initialization, parameter updates (`optimize_weights`), and activation calculation directly from `DenseLayer`.
+4. **`MaxPool2DLayer(DenseLayer)`**: Inherits from `DenseLayer`. Overrides spatial max-pooling forward pass (caching `argmax` positions) and backward pass (scattering output gradients), turning parameter initialization and updates into no-ops.
+5. **`FlattenLayer(DenseLayer)`**: Inherits from `DenseLayer`. Serves as a shape adapter bridging 4D spatial feature maps `(N, C, H, W)` into 2D matrices `(N, features)` for dense classification heads.
+
+---
 
 ## Core Components
 
-### `Loss`
-- **MSE** (`mse` / `mse_prime`) — mean squared error and its gradient
-- **Binary Cross-Entropy** (`binary_cross_entropy` / `bce_prime`) — with epsilon clipping for numerical stability
+### 1. `Loss`
+- **Mean Squared Error (`mse` / `mse_prime`)**: Standard quadratic loss for regression or basic classification.
+- **Binary Cross-Entropy (`binary_cross_entropy` / `bce_prime`)**: Logarithmic loss with $\epsilon$-clipping ($10^{-9}$) to ensure numerical stability and prevent $\log(0)$ NaNs.
 
-### `Activation`
-Mixed into `DenseLayer`. Implements both the function and its derivative for:
-- ReLU
-- Leaky ReLU (configurable `leaky_alpha`, default `0.01`)
-- Sigmoid (numerically stable — branches on sign of `z` to avoid overflow)
-- Tanh (uses `np.tanh` directly)
+### 2. `Activation`
+Pluggable non-linearities:
+- `relu` / `relu_prime`
+- `leaky-relu` / `leaky_relu_prime` (configurable $\alpha$, default `0.01`)
+- `sigmoid` / `sigmoid_prime` (numerically stable sign-branching logic)
+- `tanh` / `tanh_prime`
+- Linear / Pass-through (returns $z$ directly, useful for logits)
 
-### `DenseLayer`
-A single fully connected layer. Handles:
-- **Weight initialization** — He initialization (`sqrt(2/n_in)`) for ReLU/Leaky ReLU, Xavier-style (`sqrt(1/n_in)`) for Sigmoid/Tanh, small random init otherwise
-- **Forward pass** — linear transform + activation, caching `z`, `A`, and the input activation for use in backprop
-- **Backward pass** — computes `dw`, `db` (both normalized by batch size `m`), and propagates the delta to the previous layer
-- **Per-layer optimizer state** — each layer can independently use its own optimizer
+### 3. Pluggable Optimizers
+Configured per layer or globally at the network level:
+- **`"grad"`**: Standard Stochastic / Batch Gradient Descent.
+- **`"grad-momentum"`**: Exponentially weighted moving average of gradients ($\beta$, default `0.9`).
+- **`"adagrad"`**: Adaptive learning rate scaling based on accumulated sum of squared gradients ($\delta = 10^{-7}$).
+- **`"rmsprop"`**: Exponentially decaying average of squared gradients ($\gamma$, default `0.99`).
 
-### Optimizers (set per layer via `initialize_optimizer`)
-- `"grad"` — vanilla gradient descent
-- `"grad-momentum"` — momentum with configurable `beta`
-- `"adagrad"` — adaptive learning rate from cumulative squared gradients
-- `"rmsprop"` — exponential moving average of squared gradients, decay `gamma`
+---
 
-### `Network`
-The container class that ties everything together:
-- `add_layer(input_dims, output_dims, activation, optimizer, alpha, beta, gamma)` — appends a new `DenseLayer`, initializing its weights and optimizer. If `optimizer` is omitted, the layer inherits the `Network`'s default optimizer.
-- `forward(x)` — runs input through every layer in sequence
-- `backward(y)` — computes the loss gradient at the output layer, then backpropagates through layers in reverse, updating weights as it goes
-- `train(X, y, epochs, batch_size, shuffle, verbose)` — full training loop supporting batch, mini-batch, or stochastic gradient descent depending on `batch_size`
-- `predict(x_test)` — forward pass only, returns network output
+## Layer Specifications & API Reference
 
-Loss is configurable at the `Network` level via `cost="mse"` or `cost="binary-cross-entropy"` (the latter raises a warning if paired with a `tanh` output layer, since BCE expects outputs in `(0, 1)`).
+### `DenseLayer(input_dims, output_dims)`
+- Fully connected layer mapping `(N, input_dims)` $\to$ `(N, output_dims)`.
+- Weight initialization: He initialization for ReLU/Leaky-ReLU ($\sqrt{2 / n_{\text{in}}}$), Xavier/Glorot for Sigmoid/Tanh ($\sqrt{1 / n_{\text{in}}}$).
 
-## Usage
+### `Conv2DLayer(input_shape, num_filters, kernel_size, stride=1, padding=0)`
+- 2D Convolutional layer operating on feature maps `(N, C, H, W)`.
+- Computes output height and width: $H_{\text{out}} = \lfloor\frac{H + 2p - kh}{s}\rfloor + 1$.
+- Uses `im2col` to convert patch extraction into a single GEMM matrix product ($X_{\text{col}} \cdot W_{\text{col}}$).
+
+### `MaxPool2DLayer(input_shape, pool_size=2, stride=None)`
+- Downsamples feature maps by taking the maximum value across $k_h \times k_w$ windows.
+
+### `FlattenLayer(input_shape=None)`
+- Reshapes `(N, C, H, W)` tensors to `(N, C \times H \times W)` matrices.
+
+### `Network(optimizer="grad", cost="mse")`
+Container class providing high-level model construction and training routines:
+- `add_layer(...)` / `add_conv2d(...)` / `add_maxpool2d(...)` / `add_flatten(...)`: Helper methods to construct and append layers.
+- `forward(X)`: Sequential forward pass.
+- `backward(y)`: Computes loss gradient at output and backpropagates through layers in reverse order, executing parameter updates.
+- `train(X, y, epochs=100, batch_size=None, shuffle=True, verbose=True)`: Full training loop supporting Full-Batch, Mini-Batch, or Stochastic Gradient Descent.
+- `predict(x_test)`: Forward pass inference.
+- `save_network(name="network", path=None)` / `load_network(path)`: Persists layer array to disk via NumPy binary `.npy` format.
+
+---
+
+## Usage Examples
+
+### 1. Fully Connected Neural Network (MNIST)
 
 ```python
 import numpy as np
 from neural_nets_from_scratch2 import Network
 
-# Initialize a network with a default optimizer and loss
+# Create network with RMSProp optimizer and MSE loss
 net = Network(optimizer="rmsprop", cost="mse")
 
-# Add layers: (input_dims, output_dims, activation, optimizer=None, alpha=lr, beta, gamma)
-net.add_layer(4, 8, activation="relu", alpha=0.01)
-net.add_layer(8, 4, activation="relu", alpha=0.01)
-net.add_layer(4, 1, activation="sigmoid", alpha=0.01)
+# Add fully connected layers: 784 -> 128 -> 64 -> 10
+net.add_layer(784, 128, activation="relu", alpha=0.001)
+net.add_layer(128, 64, activation="relu", alpha=0.001)
+net.add_layer(64, 10, activation="sigmoid", alpha=0.001)
 
-# Train (batch_size=None -> full-batch, batch_size=1 -> SGD, else mini-batch)
-net.train(X_train, y_train, epochs=100, batch_size=32, shuffle=True)
+# Train on dataset
+net.train(X_train, y_train, epochs=30, batch_size=64, shuffle=True)
 
 # Predict
 predictions = net.predict(X_test)
 ```
 
-## MNIST Example (`train_mnist.py`)
+### 2. Convolutional Neural Network (CNN)
 
-Trains a `784 → 128 → 64 → 10` network on MNIST digits, downloaded via `sklearn.datasets.fetch_openml`:
+```python
+import numpy as np
+from neural_nets_from_scratch2 import Network
 
-- Inputs scaled to `[0, 1]`, labels one-hot encoded
-- Architecture: ReLU → ReLU → Sigmoid, all layers using `rmsprop` (`alpha=0.001`)
-- Loss: MSE
-- 30 epochs, mini-batches of 64, with train/test accuracy reported at the end (via `argmax` over the one-hot outputs)
+# Initialize network
+net = Network(optimizer="rmsprop", cost="mse")
 
-Run it with:
+# Add 2D Convolution: Input (1, 28, 28) -> Output (8, 26, 26)
+out_shape1 = net.add_conv2d(input_shape=(1, 28, 28), num_filters=8, kernel_size=3, activation="relu", alpha=0.001)
+
+# Add MaxPool2D: (8, 26, 26) -> Output (8, 13, 13)
+out_shape2 = net.add_maxpool2d(input_shape=out_shape1, pool_size=2)
+
+# Flatten feature map to 2D matrix: (8, 13, 13) -> 1352 features
+net.add_flatten()
+
+# Dense classification head: 1352 -> 10
+net.add_layer(1352, 10, activation="sigmoid", alpha=0.001)
+
+# Train CNN on 4D image data (N, C, H, W)
+net.train(X_train_4d, y_train_oh, epochs=10, batch_size=32)
+```
+
+---
+
+## Executing MNIST Benchmark
+
+Run the included end-to-end training script:
 
 ```bash
 python train_mnist.py
 ```
 
-**Dependencies:** `numpy`, `scikit-learn` (for `fetch_openml` and `train_test_split`)
-
-## Known Limitations / Roadmap
-
-- No dedicated multi-class loss (cross-entropy) or softmax activation yet — MNIST currently trains with sigmoid outputs + MSE, which works but converges more slowly than a proper softmax + categorical cross-entropy setup would
-- No model saving/loading
-- No validation split / early stopping during training
-- No gradient checking or unit tests
-
-## Requirements
-
-- Python 3.x
-- NumPy
-- scikit-learn (only needed for `train_mnist.py`)
+**Dependencies:** `numpy`, `scikit-learn`
